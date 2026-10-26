@@ -66,9 +66,7 @@ jobs:
       uses: actions/checkout@v3
     - name: Download Stock Vendor Boot
       run: |
-        wget -O vendor_boot.img "https://pixeldrain.com/api/file/vZmThNHh"
-        mkdir -p workspace/out/target/product/Infinix-X6833B
-        touch workspace/out/target/product/Infinix-X6833B/recovery.img
+        wget -O vendor_boot.img "https://pixeldrain.com/api/file/vZmThNHh
     - name: Display Inputs
       run: |
         echo "::group::User Environment Variables"
@@ -78,7 +76,7 @@ jobs:
         echo "Device Branch: ${{ github.event.inputs.DEVICE_TREE_BRANCH }}"
         echo "Device Path: ${{ github.event.inputs.DEVICE_PATH }}"
         echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
-        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}image"
+        echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}"
         echo "Include Recovery Installer: ${{ github.event.inputs.RECOVERY_INSTALLER }}"
         echo "Release recovery.tar For Samsung devices: ${{ github.event.inputs.RECOVERY_TAR }}"
         echo "::endgroup::"
@@ -176,6 +174,13 @@ jobs:
         fi
         echo "DEVICE_TREE_URL=${DEVICE_TREE_URL}" >> $GITHUB_ENV
 
+        
+    - name: Create Recovery Stub For Checker
+      run: |
+        mkdir -p workspace/out/target/product/Infinix-X6833B
+        touch workspace/out/target/product/Infinix-X6833B/recovery.img
+
+        
     - name: Check if Recovery Exist
       run: |
         cd workspace
