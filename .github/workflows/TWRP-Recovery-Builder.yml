@@ -64,7 +64,11 @@ jobs:
     steps:
     - name: Check Out
       uses: actions/checkout@v3
-      
+    - name: Download Stock Vendor Boot
+      run: |
+        wget -O vendor_boot.img "https://pixeldrain.com/api/file/vZmThNHh"
+        mkdir -p workspace/out/target/product/Infinix-X6833B
+        touch workspace/out/target/product/Infinix-X6833B/recovery.img
     - name: Display Inputs
       run: |
         echo "::group::User Environment Variables"
