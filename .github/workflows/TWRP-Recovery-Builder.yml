@@ -219,8 +219,20 @@ jobs:
       continue-on-error: true
 
 
-    - name: Upload TWRP Image directly
-      uses: actions/upload-artifact@v4
+    - name: Create GitHub Release and Upload TWRP
+      uses: softprops/action-gh-release@v1
       with:
-        name: TWRP-Infinix-Note30
-        path: workspace/out/target/product/Infinix-X6833B/vendor_boot.img
+        tag_name: TWRP-v940-${{ github.run_id }}
+        name: Unofficial TWRP for Infinix Note 30 (Android 16)
+        body: |
+          Кастомное рекавери TWRP для Infinix Note 30 (X6833B).
+          Скомпилировано автоматически под кастом XOS (Android 16).
+          Использовано оригинальное ядро из вашего vendor_boot.
+        draft: false
+        prerelease: false
+        files: |
+          workspace/out/target/product/**/*.img
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+        
