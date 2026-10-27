@@ -204,7 +204,7 @@ jobs:
         draft: false
         prerelease: false
         files: |
-          workspace/out/target/product/**/*.img
+          workspace/out/target/product/Infinix-X6833B/vendor_boot.img
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
