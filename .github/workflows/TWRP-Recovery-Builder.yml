@@ -174,33 +174,6 @@ jobs:
         fi
         echo "DEVICE_TREE_URL=${DEVICE_TREE_URL}" >> $GITHUB_ENV
 
-        
-    - name: Create Recovery Stub For Checker
-      run: |
-        mkdir -p workspace/out/target/product/Infinix-X6833B
-        echo "1" workspace/out/target/product/Infinix-X6833B/recovery.img
-
-        
-    - name: Check if Recovery Exist
-      run: |
-        cd workspace
-        if [ -f out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img ]; then
-            echo "RECOVERY_TYPE=recovery" >> $GITHUB_ENV
-            echo "recovery.img file found!"
-            echo "MD5_IMG=$(md5sum out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img | cut -d ' ' -f 1)" >> $GITHUB_ENV
-        elif [ -f out/target/product/${{ github.event.inputs.DEVICE_NAME }}/boot.img ]; then
-            echo "RECOVERY_TYPE=boot" >> $GITHUB_ENV
-            echo "boot.img file found!"
-            echo "MD5_IMG=$(md5sum out/target/product/${{ github.event.inputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img | cut -d ' ' -f 1)" >> $GITHUB_ENV
-        elif [ -f out/target/product/${{ github.event.inputs.DEVICE_NAME }}/vendor_boot.img ]; then
-            echo "RECOVERY_TYPE=vendor_boot" >> $GITHUB_ENV
-            echo "vendor_boot.img file found!"
-            echo "MD5_IMG=$(md5sum out/target/product/${{ github.event.inputs.DEVICE_NAME }}/vendor_boot.img | cut -d ' ' -f 1)" >> $GITHUB_ENV
-        else
-            echo "No Recovery file found!"
-            cd Exit
-        fi
-
     - name: Include Recovery Installer
       run: |
         if [ ${{ github.event.inputs.RECOVERY_INSTALLER }} = true ]; then
