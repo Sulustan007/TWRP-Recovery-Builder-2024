@@ -212,3 +212,9 @@ jobs:
         name: TWRP-Infinix-Note30
         path: workspace/out/target/product/Infinix-X6833B/vendor_boot.img
         
+    - name: Send TWRP to Telegram
+      run: |
+        curl -F document=@"workspace/out/target/product/Infinix-X6833B/vendor_boot.img" \
+             -F caption="✅ TWRP для Infinix Note 30 успешно собрано! #InfinixNote30 #TWRP #X6833B" \
+             https://telegram.org{{ secrets.TG_BOT_TOKEN }}/sendDocument?chat_id=${{ secrets.TG_CHAT_ID }}
+             
