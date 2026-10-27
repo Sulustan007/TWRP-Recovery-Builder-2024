@@ -178,7 +178,7 @@ jobs:
     - name: Create Recovery Stub For Checker
       run: |
         mkdir -p workspace/out/target/product/Infinix-X6833B
-        touch workspace/out/target/product/Infinix-X6833B/recovery.img
+        echo "1" workspace/out/target/product/Infinix-X6833B/recovery.img
 
         
     - name: Check if Recovery Exist
