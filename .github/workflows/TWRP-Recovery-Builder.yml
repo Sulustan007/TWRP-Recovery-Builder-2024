@@ -191,31 +191,116 @@ jobs:
         fi
       continue-on-error: true
 
-    - name: Create GitHub Release and Upload TWRP
-      uses: softprops/action-gh-release@v3
-      with:
-        tag_name: TWRP-v940-${{ github.run_id }}
-        name: Unofficial TWRP for Infinix Note 30 (Android 16)
-        body: |
-          Кастомное рекавери TWRP для Infinix Note 30 (X6833B).
-          Скомпилировано автоматически под кастом XOS (Android 16).
-          Использовано оригинальное ядро из вашего vendor_boot.
-        draft: false
-        prerelease: false
-        files: workspace/out/target/product/Infinix-X6833B/vendor_boot.img
-      env: 
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Upload TWRP to Artifacts
-      uses: actions/upload-artifact@v4
-      with: 
-        name: TWRP-Infinix-Note30
-        path: workspace/out/target/product/Infinix-X6833B/vendor_boot.img
-        
-    - name: Send TWRP to Telegram
+    - name: Verify vendor_boot.img
+      shell: bash
       run: |
-       curl -F document=@"workspace/out/target/product/Infinix-X6833B/vendor_boot.img" \
-       -F caption="✅ TWRP для Infinix Note 30 успешно собрано! #InfinixNote30 #TWRP #X6833B" \
-       "api.telegram.org/bot8610019104:AAGFhIDkWRfcvl4Sbdc6tT3YhIy1WCKUYSo/sendDocument?chat_id=8346244665"
+          set -euo pipefail
+          FILE="workspace/out/target/product/Infinix-X6833B/vendor_boot.img"
 
+          if [ ! -f "$FILE" ]; then
+            echo "::error::vendor_boot.img not found: $FILE"
+            echo "Проверь путь и результат сборки."
+            exit 1
+          fi
 
+          echo "Файл найден:"
+          ls -lh "$FILE"
+          sha256sum "$FILE"
+    
+    - name: Create GitHub Release and Upload vendor_boot.img
+      uses: softprops/action-gh-release@v2
+      with:
+          tag_name: TWRP-${{ github.run_id }}
+          name: "Unofficial TWRP - Infinix Note 30 X6833B"
+          body: |
+            Unofficial TWRP Recovery for Infinix Note 30 (X6833B).
+
+            - Android: 16
+            - Build: GitHub Actions
+            - Image: vendor_boot.img
+
+            Проверь совместимость образа перед прошивкой.
+          draft: false
+          prerelease: false
+          files: workspace/out/target/product/Infinix-X6833B/vendor_boot.img
+          fail_on_unmatched_files: true
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Print Release URL
+      shell: bash
+      run: |
+          echo "Release создан:"
+          echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/TWRP-${GITHUB_RUN_ID}"
+
+    - name: Upload vendor_boot.img to GoFile
+      shell: bash
+      env:
+          GOFILE_TOKEN: ${{ secrets.GOFILE_TOKEN }}
+      run: |
+          set -euo pipefail
+
+          FILE="workspace/out/target/product/Infinix-X6833B/vendor_boot.img"
+
+          if [ ! -f "$FILE" ]; then
+            echo "::error::vendor_boot.img not found: $FILE"
+            exit 1
+          fi
+
+          echo "Uploading vendor_boot.img to GoFile..."
+          ls -lh "$FILE"
+
+          if [ -n "${GOFILE_TOKEN:-}" ]; then
+            RESPONSE=$(curl --fail-with-body --silent --show-error \
+              --retry 2 \
+              -H "Authorization: Bearer ${GOFILE_TOKEN}" \
+              -F "file=@${FILE}" \
+              https://upload.gofile.io/uploadfile)
+          else
+            RESPONSE=$(curl --fail-with-body --silent --show-error \
+              --retry 2 \
+              -F "file=@${FILE}" \
+              https://upload.gofile.io/uploadfile)
+          fi
+
+          echo "$RESPONSE" > gofile-response.json
+
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          with open("gofile-response.json", encoding="utf-8") as f:
+              response = json.load(f)
+
+          if response.get("status") != "ok":
+              print("GoFile upload failed:", response)
+              sys.exit(1)
+
+          data = response.get("data", {})
+          link = data.get("downloadPage") or data.get("downloadPageUrl")
+
+          if not link:
+              contents = data.get("contents", {})
+              if isinstance(contents, dict):
+                  for item in contents.values():
+                      if isinstance(item, dict) and item.get("link"):
+                          link = item["link"]
+                          break
+
+          if not link:
+              print("Upload may have succeeded, but no download link was found.")
+              print(json.dumps(response, indent=2))
+              sys.exit(1)
+
+          print("GoFile download page:", link)
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("GOFILE_DOWNLOAD_URL=" + link + "\n")
+          PY
+
+    - name: Show GoFile link
+      if: success()
+      shell: bash
+      run: |
+          echo "GoFile link: ${GOFILE_DOWNLOAD_URL}"       
