@@ -190,41 +190,26 @@ jobs:
           tar -cvf ${{ env.RECOVERY_TYPE }}.tar ${{ env.RECOVERY_TYPE }}.img
         fi
       continue-on-error: true
-
-    
+      
     - name: Find vendor_boot.img
+      id: find_vendor_boot
       shell: bash
       run: |
-          set -euo pipefail
-
           echo "Searching for vendor_boot.img..."
+          echo "Workspace: $GITHUB_WORKSPACE"
 
-          find . -type f -name "vendor_boot.img" -print
-
-          FILE="$(find . -type f -name "vendor_boot.img" -print -quit)"
+          FILE="$(find "$GITHUB_WORKSPACE" -type f -name "vendor_boot.img" -print -quit 2>/dev/null)"
 
           if [ -z "$FILE" ]; then
-            echo "::error::vendor_boot.img was not found."
-            echo "Checking available boot images..."
-
-            find . -type f \( \
-              -name "boot.img" -o \
-              -name "recovery.img" -o \
-              -name "vendor_boot*.img" \
-            \) -print | head -100
-
+            echo "::error::vendor_boot.img not found!"
+            echo "Available image files:"
+            find "$GITHUB_WORKSPACE" -type f -name "*.img" 2>/dev/null || true
             exit 1
           fi
 
-          echo "Found image: $FILE"
-          ls -lh "$FILE"
+          echo "Found: $FILE"
+          echo "image_path=$FILE" >> "$GITHUB_OUTPUT"
 
-          mkdir -p upload
-          cp "$FILE" upload/vendor_boot.img
-
-          echo "VENDOR_BOOT_FILE=upload/vendor_boot.img" >> "$GITHUB_ENV"
-
-    
     - name: Create GitHub Release and Upload vendor_boot.img
       uses: softprops/action-gh-release@v2
       with:
@@ -240,85 +225,109 @@ jobs:
             Проверь совместимость образа перед прошивкой.
           draft: false
           prerelease: false
-          files: workspace/out/target/product/Infinix-X6833B/vendor_boot.img
+          files: ${{ steps.find_vendor_boot.outputs.image_path }}
           fail_on_unmatched_files: true
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Print Release URL
+      if: success()
       shell: bash
       run: |
-          echo "Release создан:"
-          echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/TWRP-${GITHUB_RUN_ID}"
+        echo "GitHub Release:"
+        echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/TWRP-${GITHUB_RUN_ID}"
 
+        - name: Find vendor_boot.img
+          id: find_vendor_boot
+          shell: bash
+          run: |
+            set -euo pipefail
+
+        FILE="$(find "$GITHUB_WORKSPACE" -type f -name "vendor_boot.img" -print -quit 2>/dev/null || true)"
+
+        if [ -z "$FILE" ]; then
+          echo "::error::vendor_boot.img not found"
+          find "$GITHUB_WORKSPACE" -type f -name "*.img" 2>/dev/null || true
+          exit 1
+        fi
+
+        echo "Found: $FILE"
+        echo "image_path=$FILE" >> "$GITHUB_OUTPUT"
+
+    
     - name: Upload vendor_boot.img to GoFile
       shell: bash
       env:
-          GOFILE_TOKEN: ${{ secrets.GOFILE_TOKEN }}
+        GOFILE_TOKEN: ${{ secrets.GOFILE_TOKEN }}
+        FILE: ${{ steps.find_vendor_boot.outputs.image_path }}
       run: |
-          set -euo pipefail
+        set -euo pipefail
 
-          FILE="upload/vendor_boot.img"
+        if [ -z "${FILE:-}" ] || [ ! -f "$FILE" ]; then
+          echo "::error::vendor_boot.img not found: ${FILE:-empty path}"
+          exit 1
+        fi
 
-          if [ ! -f "$FILE" ]; then
-            echo "::error::vendor_boot.img not found: $FILE"
-            exit 1
-          fi
+        echo "Uploading: $FILE"
+        ls -lh "$FILE"
 
-          echo "Uploading vendor_boot.img to GoFile..."
-          ls -lh "$FILE"
+        if [ -n "${GOFILE_TOKEN:-}" ]; then
+          RESPONSE=$(curl --fail-with-body --silent --show-error \
+            --retry 2 \
+            -H "Authorization: Bearer ${GOFILE_TOKEN}" \
+            -F "file=@${FILE}" \
+            https://upload.gofile.io/uploadfile)
+        else
+          RESPONSE=$(curl --fail-with-body --silent --show-error \
+            --retry 2 \
+            -F "file=@${FILE}" \
+            https://upload.gofile.io/uploadfile)
+        fi
 
-          if [ -n "${GOFILE_TOKEN:-}" ]; then
-            RESPONSE=$(curl --fail-with-body --silent --show-error \
-              --retry 2 \
-              -H "Authorization: Bearer ${GOFILE_TOKEN}" \
-              -F "file=@${FILE}" \
-              https://upload.gofile.io/uploadfile)
-          else
-            RESPONSE=$(curl --fail-with-body --silent --show-error \
-              --retry 2 \
-              -F "file=@${FILE}" \
-              https://upload.gofile.io/uploadfile)
-          fi
+        echo "$RESPONSE" > gofile-response.json
 
-          echo "$RESPONSE" > gofile-response.json
+        python3 - <<'PY'
+        import json
+        import sys
 
-          python3 - <<'PY'
-          import json
-          import os
-          import sys
+        with open("gofile-response.json", encoding="utf-8") as f:
+            response = json.load(f)
 
-          with open("gofile-response.json", encoding="utf-8") as f:
-              response = json.load(f)
+        if response.get("status") != "ok":
+            print("GoFile upload failed:", response)
+            sys.exit(1)
 
-          if response.get("status") != "ok":
-              print("GoFile upload failed:", response)
-              sys.exit(1)
+        data = response.get("data", {})
+        link = data.get("downloadPage") or data.get("downloadPageUrl")
 
-          data = response.get("data", {})
-          link = data.get("downloadPage") or data.get("downloadPageUrl")
+        if not link:
+            print("Upload response has no download link:", response)
+            sys.exit(1)
 
-          if not link:
-              contents = data.get("contents", {})
-              if isinstance(contents, dict):
-                  for item in contents.values():
-                      if isinstance(item, dict) and item.get("link"):
-                          link = item["link"]
-                          break
+        print("GoFile download page:", link)
 
-          if not link:
-              print("Upload may have succeeded, but no download link was found.")
-              print(json.dumps(response, indent=2))
-              sys.exit(1)
+        with open("gofile-link.txt", "w", encoding="utf-8") as f:
+            f.write(link)
+        PY
 
-          print("GoFile download page:", link)
-
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-              f.write("GOFILE_DOWNLOAD_URL=" + link + "\n")
-          PY
+        echo "## GoFile Upload" >> "$GITHUB_STEP_SUMMARY"
+        echo "Download link: $(cat gofile-link.txt)" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Show GoFile link
       if: success()
       shell: bash
       run: |
-          echo "GoFile link: ${GOFILE_DOWNLOAD_URL}"       
+        if [ ! -f gofile-link.txt ]; then
+          echo "::error::GoFile link file not found"
+          exit 1
+        fi
+
+        LINK="$(cat gofile-link.txt)"
+
+        echo "GoFile download link: $LINK"
+
+        {
+          echo "## GoFile Download"
+          echo ""
+          echo "[$LINK]($LINK)"
+        } >> "$GITHUB_STEP_SUMMARY"
