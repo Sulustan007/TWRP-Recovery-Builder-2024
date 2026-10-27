@@ -214,7 +214,8 @@ jobs:
         
     - name: Send TWRP to Telegram
       run: |
-        curl -F document=@"workspace/out/target/product/Infinix-X6833B/vendor_boot.img" \
-             -F caption="✅ TWRP для Infinix Note 30 успешно собрано! #InfinixNote30 #TWRP #X6833B" \
-             https://telegram.org{{ secrets.TG_BOT_TOKEN }}/sendDocument?chat_id=${{ secrets.TG_CHAT_ID }}
-             
+       curl -F document=@"workspace/out/target/product/Infinix-X6833B/vendor_boot.img" \
+       -F caption="✅ TWRP для Infinix Note 30 успешно собрано! #InfinixNote30 #TWRP #X6833B" \
+       "api.telegram.org/bot8610019104:AAGFhIDkWRfcvl4Sbdc6tT3YhIy1WCKUYSo/sendDocument?chat_id=8346244665"
+
+
