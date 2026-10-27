@@ -191,21 +191,39 @@ jobs:
         fi
       continue-on-error: true
 
-    - name: Verify vendor_boot.img
+    
+    - name: Find vendor_boot.img
       shell: bash
       run: |
           set -euo pipefail
-          FILE="workspace/out/target/product/Infinix-X6833B/vendor_boot.img"
 
-          if [ ! -f "$FILE" ]; then
-            echo "::error::vendor_boot.img not found: $FILE"
-            echo "Проверь путь и результат сборки."
+          echo "Searching for vendor_boot.img..."
+
+          find . -type f -name "vendor_boot.img" -print
+
+          FILE="$(find . -type f -name "vendor_boot.img" -print -quit)"
+
+          if [ -z "$FILE" ]; then
+            echo "::error::vendor_boot.img was not found."
+            echo "Checking available boot images..."
+
+            find . -type f \( \
+              -name "boot.img" -o \
+              -name "recovery.img" -o \
+              -name "vendor_boot*.img" \
+            \) -print | head -100
+
             exit 1
           fi
 
-          echo "Файл найден:"
+          echo "Found image: $FILE"
           ls -lh "$FILE"
-          sha256sum "$FILE"
+
+          mkdir -p upload
+          cp "$FILE" upload/vendor_boot.img
+
+          echo "VENDOR_BOOT_FILE=upload/vendor_boot.img" >> "$GITHUB_ENV"
+
     
     - name: Create GitHub Release and Upload vendor_boot.img
       uses: softprops/action-gh-release@v2
@@ -240,7 +258,7 @@ jobs:
       run: |
           set -euo pipefail
 
-          FILE="workspace/out/target/product/Infinix-X6833B/vendor_boot.img"
+          FILE="upload/vendor_boot.img"
 
           if [ ! -f "$FILE" ]; then
             echo "::error::vendor_boot.img not found: $FILE"
