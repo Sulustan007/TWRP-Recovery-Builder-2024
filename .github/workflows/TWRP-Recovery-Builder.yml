@@ -69,45 +69,30 @@ jobs:
 
         URL="https://cold-na-phx-3.gofile.io/download/web/94ad1c77-e53d-417c-932e-3592a4315824/vendor_boot.img"
 
-        set +e
-        curl -L --retry 2 --retry-delay 3 \
+        echo "Downloading vendor_boot.img..."
+
+        curl -fLsS --retry 3 \
           --connect-timeout 20 \
-          -D download_headers.txt \
-          -o vendor_boot.img \
-          -w '\nHTTP status: %{http_code}\nDownloaded: %{size_download} bytes\n' \
-          "$URL"
-        CURL_EXIT=$?
-        set -e
+          -o vendor_boot.img "$URL"
 
-        echo "curl exit code: $CURL_EXIT"
+        SIZE=$(stat -c %s vendor_boot.img)
 
-        if [ -f download_headers.txt ]; then
-          echo "=== Response headers ==="
-          cat download_headers.txt
-        fi
+        echo "Downloaded size: $SIZE bytes"
+        file vendor_boot.img
 
-        if [ -f vendor_boot.img ]; then
-          echo "=== Downloaded file ==="
-          ls -lh vendor_boot.img
-          file vendor_boot.img
-          echo "=== First 200 bytes ==="
-          head -c 200 vendor_boot.img
+        if [ "$SIZE" -lt 1048576 ]; then
+          echo "::error::Downloaded file is too small or may be an HTML page."
+          head -c 300 vendor_boot.img || true
           echo
-        fi
-
-        if [ "$CURL_EXIT" -ne 0 ]; then
-          echo "::error::Download failed. Check the URL and curl output."
           exit 1
         fi
 
-        if [ ! -f vendor_boot.img ] || \
-           [ "$(stat -c %s vendor_boot.img)" -lt 1048576 ]; then
-          echo "::error::Downloaded file is missing or too small."
-          exit 1
+        if ! file vendor_boot.img | grep -qi 'Android'; then
+          echo "::warning::File type is not identified as Android; verify the image before using it."
         fi
 
-        echo "Stock vendor_boot.img downloaded successfully."
-
+        sha256sum vendor_boot.img
+        ls -lh vendor_boot.img
 
 
     - name: Display Inputs
