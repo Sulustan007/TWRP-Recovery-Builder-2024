@@ -230,31 +230,14 @@ jobs:
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    
     - name: Print Release URL
-      if: success()
       shell: bash
       run: |
         echo "GitHub Release:"
         echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/TWRP-${GITHUB_RUN_ID}"
 
-        - name: Find vendor_boot.img
-          id: find_vendor_boot
-          shell: bash
-          run: |
-            set -euo pipefail
 
-        FILE="$(find "$GITHUB_WORKSPACE" -type f -name "vendor_boot.img" -print -quit 2>/dev/null || true)"
-
-        if [ -z "$FILE" ]; then
-          echo "::error::vendor_boot.img not found"
-          find "$GITHUB_WORKSPACE" -type f -name "*.img" 2>/dev/null || true
-          exit 1
-        fi
-
-        echo "Found: $FILE"
-        echo "image_path=$FILE" >> "$GITHUB_OUTPUT"
-
-    
     - name: Upload vendor_boot.img to GoFile
       shell: bash
       env:
