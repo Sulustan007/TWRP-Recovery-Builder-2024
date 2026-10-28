@@ -226,21 +226,30 @@ jobs:
     - name: Diagnose Android source tree
       shell: bash
       run: |
+        set -eo pipefail
         cd "$GITHUB_WORKSPACE/workspace"
 
-        echo "=== Android build version ==="
-        grep -n "PLATFORM_VERSION\|PLATFORM_SDK_VERSION" \
-          build/make/core/version_defaults.mk || true
+        echo "=== Workspace ==="
+        pwd
+        ls -la
 
-        echo "=== Missing GSI keys file ==="
-        ls -la build/make/target/product/ || true
+        echo "=== Build system ==="
+        ls -ld build build/make 2>/dev/null || true
+        ls -la build/make/core 2>/dev/null | head -40 || true
 
-        echo "=== Common makefile ==="
-        sed -n '1,100p' device/transsion/mt6789-common/common.mk
+        echo "=== GSI key references ==="
+        grep -R -n 'gsi_keys.mk' device/infinix device/transsion build/make 2>/dev/null || true
 
-        echo "=== Device tree remotes and branches ==="
-        git -C device/infinix/Infinix-X6833B remote -v || true
-        git -C device/transsion/mt6789-common remote -v || true
+        echo "=== Device tree ==="
+        ls -la device/infinix/Infinix-X6833B 2>/dev/null || true
+
+        echo "=== Common tree ==="
+        find device -maxdepth 4 -type f -name common.mk 2>/dev/null || true
+        find device -maxdepth 4 -type d -name '*mt6789*' 2>/dev/null || true
+
+        echo "=== Repository remotes ==="
+        git -C device/infinix/Infinix-X6833B remote -v 2>/dev/null || true
+        git -C device/transsion/mt6789-common remote -v 2>/dev/null || true
    
     
     - name: Configure and Build TWRP
