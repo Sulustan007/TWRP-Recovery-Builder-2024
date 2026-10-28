@@ -222,37 +222,38 @@ jobs:
         cd /usr/bin
         sudo ln -sf python2 python
 
-    
+        
     - name: Building Image
       shell: bash
       run: |
         set -eo pipefail
         cd "$GITHUB_WORKSPACE/workspace"
 
+        echo "=== Checking build environment ==="
+        test -f build/envsetup.sh || {
+          echo "::error::build/envsetup.sh not found"
+          exit 1
+        }
+
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
 
-        echo "=== Product definitions ==="
-        cat device/infinix/Infinix-X6833B/AndroidProducts.mk
-
-        echo "=== Lunch choices ==="
-        grep -R -nE 'COMMON_LUNCH_CHOICES|twrp_X6833B' \
-          device/infinix/Infinix-X6833B \
-          vendor/twrp \
-          2>/dev/null || true
-
-        echo "=== Build system release options ==="
-        lunch --help 2>&1 || true
-
-        echo "=== Available targets ==="
-        if command -v list_products >/dev/null 2>&1; then
-          list_products | grep -i 'X6833B' || true
+        echo "=== Configuring X6833B build ==="
+        if lunch twrp_X6833B-trunk_staging-eng; then
+          echo "Lunch target selected."
+        else
+          echo "::error::Lunch target not accepted by this source tree."
+          echo "Checking product release configuration..."
+          grep -R -nE 'TARGET_RELEASE|PRODUCT_RELEASE|COMMON_LUNCH_CHOICES' \
+            device/infinix/Infinix-X6833B build/make/core \
+            2>/dev/null | head -n 100 || true
+          exit 1
         fi
 
-        echo "::error::Check the log above for the exact supported lunch target."
-        exit 1
+        echo "=== Building vendor boot image ==="
+        mka adbd vendorbootimage -j2
 
-                  
+                
     - name: Upload Build Log
       if: always()
       uses: actions/upload-artifact@v4
