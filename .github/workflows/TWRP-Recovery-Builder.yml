@@ -189,7 +189,30 @@ jobs:
 
         cd "${{ github.event.inputs.DEVICE_PATH }}"
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
         
+    - name: Check GSI keys compatibility
+      shell: bash
+      run: |
+        cd "$GITHUB_WORKSPACE/workspace"
+
+        echo "===== GSI KEYS FILES ====="
+        find build/make/target/product -maxdepth 2 -type f \
+          \( -name '*gsi*keys*.mk' -o -name 'gsi_keys.mk' \) \
+          -print
+
+        echo "===== GSI KEYS REFERENCES ====="
+        grep -R -n 'gsi_keys.mk\|developer_gsi_keys.mk' \
+          build/make device/transsion/mt6789-common \
+          2>/dev/null || true
+
+        echo "===== BUILD MAKE BRANCH ====="
+        git -C build/make remote -v
+        git -C build/make log -1 --oneline
+
+        echo "===== COMMON TREE BRANCH ====="
+        git -C device/transsion/mt6789-common remote -v
+        git -C device/transsion/mt6789-common log -1 --oneline
 
 
     - name: Check Build Makefile
