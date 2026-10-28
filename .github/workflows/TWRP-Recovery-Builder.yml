@@ -232,34 +232,25 @@ jobs:
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
 
-        echo "=== Finding X6833B lunch target ==="
+        echo "=== Product definitions ==="
+        cat device/infinix/Infinix-X6833B/AndroidProducts.mk
 
-        PRODUCT=""
-        for file in \
-          device/infinix/Infinix-X6833B/AndroidProducts.mk \
-          device/infinix/Infinix-X6833B/twrp_*.mk \
-          device/infinix/Infinix-X6833B/lineage_*.mk
-        do
-          [ -f "$file" ] || continue
-          PRODUCT=$(grep -hE 'COMMON_LUNCH_CHOICES' "$file" -A 20 \
-            | grep -oE '[[:alnum:]_]+-userdebug|[[:alnum:]_]+-eng' \
-            | grep -i 'X6833B' | head -n 1 || true)
-          [ -n "$PRODUCT" ] && break
-        done
+        echo "=== Lunch choices ==="
+        grep -R -nE 'COMMON_LUNCH_CHOICES|twrp_X6833B' \
+          device/infinix/Infinix-X6833B \
+          vendor/twrp \
+          2>/dev/null || true
 
-        if [ -z "$PRODUCT" ]; then
-          echo "::error::Could not automatically find the X6833B lunch target."
-          echo "Available product definitions:"
-          grep -R -nE 'COMMON_LUNCH_CHOICES|PRODUCT_NAME' \
-            device/infinix/Infinix-X6833B || true
-          exit 1
+        echo "=== Build system release options ==="
+        lunch --help 2>&1 || true
+
+        echo "=== Available targets ==="
+        if command -v list_products >/dev/null 2>&1; then
+          list_products | grep -i 'X6833B' || true
         fi
 
-        echo "Found target: $PRODUCT"
-        lunch "$PRODUCT"
-
-        echo "=== Building images ==="
-        mka adbd vendorbootimage -j2
+        echo "::error::Check the log above for the exact supported lunch target."
+        exit 1
 
                   
     - name: Upload Build Log
