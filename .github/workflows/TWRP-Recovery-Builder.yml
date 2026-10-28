@@ -222,7 +222,6 @@ jobs:
         cd /usr/bin
         sudo ln -sf python2 python
 
-    
     - name: Diagnose Android source tree
       shell: bash
       run: |
@@ -234,45 +233,63 @@ jobs:
         ls -la
 
         echo "=== Build system ==="
-        ls -ld build build/make 2>/dev/null || true
-        ls -la build/make/core 2>/dev/null | head -40 || true
+        ls -ld build build/make build/make/core 2>/dev/null || true
+
+        echo "=== Loading build environment ==="
+        source build/envsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+
+        echo "=== Common device tree ==="
+        if [ -f device/transsion/mt6789-common/common.mk ]; then
+          sed -n '1,80p' device/transsion/mt6789-common/common.mk
+        else
+          echo "common.mk not found at expected path"
+          find device -maxdepth 5 -type f -name common.mk 2>/dev/null || true
+        fi
 
         echo "=== GSI key references ==="
         grep -R -n 'gsi_keys.mk' device/infinix device/transsion build/make 2>/dev/null || true
 
-        echo "=== Device tree ==="
-        ls -la device/infinix/Infinix-X6833B 2>/dev/null || true
+        echo "=== Available GSI files ==="
+        find build/make/target/product -maxdepth 2 \
+          \( -iname '*gsi*keys*.mk' -o -iname '*gsi*.mk' \) \
+          -print 2>/dev/null || true
 
-        echo "=== Common tree ==="
-        find device -maxdepth 4 -type f -name common.mk 2>/dev/null || true
-        find device -maxdepth 4 -type d -name '*mt6789*' 2>/dev/null || true
+        echo "=== Device product configuration ==="
+        cat device/infinix/Infinix-X6833B/AndroidProducts.mk 2>/dev/null || true
 
         echo "=== Repository remotes ==="
         git -C device/infinix/Infinix-X6833B remote -v 2>/dev/null || true
         git -C device/transsion/mt6789-common remote -v 2>/dev/null || true
-   
-    
+
+        echo "=== Diagnostic completed ==="
+
+        
     - name: Configure and Build TWRP
       shell: bash
       run: |
         set -eo pipefail
         cd "$GITHUB_WORKSPACE/workspace"
 
+        echo "=== Loading build environment ==="
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
 
-        echo "=== Available release configs ==="
-        grep -n "ap2a\|trunk_staging" build/make/core/release_config.mk || true
+        echo "=== Inspecting common device tree ==="
+        if [ -f device/transsion/mt6789-common/common.mk ]; then
+          sed -n '1,50p' device/transsion/mt6789-common/common.mk
+        else
+          echo "::error::Common device tree was not cloned"
+          find device -maxdepth 5 -type f -name common.mk
+          exit 1
+        fi
 
-        echo "=== Checking device product ==="
-        cat device/infinix/Infinix-X6833B/AndroidProducts.mk
+        echo "=== Checking missing include ==="
+        grep -R -n 'gsi_keys.mk' device/transsion device/infinix 2>/dev/null || true
 
-        echo "=== Setting target ==="
-        lunch twrp_X6833B-ap2a-eng
-
-        echo "=== Building vendor boot ==="
-        mka adbd vendorbootimage -j2
-
+        echo "=== Checking available files ==="
+        ls -l build/make/target/product/*gsi* 2>/dev/null || true
+   
                 
     - name: Upload Build Log
       if: always()
