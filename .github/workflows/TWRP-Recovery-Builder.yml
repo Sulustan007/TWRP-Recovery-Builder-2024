@@ -65,78 +65,32 @@ jobs:
       shell: bash
       env:
         GOFILE_TOKEN: ${{ secrets.GOFILE_TOKEN }}
+        FOLDER_ID: RU3Ms5a7
       run: |
         set -euo pipefail
 
-        FOLDER_ID="RU3Ms5a7"
-        API_URL="https://api.gofile.io/contents/${FOLDER_ID}"
-
-        echo "Getting file information from GoFile API..."
-
-        curl -fLsS --retry 3 \
-          -H "Authorization: Bearer ${GOFILE_TOKEN}" \
-          -H "Accept: application/json" \
-          "$API_URL" \
-          -o gofile.json
-
-        python3 - <<'PY'
-        import json
-        import sys
-
-        with open("gofile.json", encoding="utf-8") as f:
-            response = json.load(f)
-
-        if response.get("status") != "ok":
-            sys.exit(f"GoFile API error: {response}")
-
-        children = response.get("data", {}).get("children", {})
-        if isinstance(children, dict):
-            files = list(children.values())
-        elif isinstance(children, list):
-            files = children
-        else:
-            files = []
-
-        target = next(
-            (item for item in files if item.get("name") == "vendor_boot.img"),
-            None
-        )
-
-        if target is None:
-            print("Files found in folder:")
-            for item in files:
-                print("-", item.get("name"))
-            sys.exit("vendor_boot.img not found in this folder")
-
-        link = target.get("link")
-        if not link:
-            sys.exit("GoFile API did not return a download link")
-
-        with open("download-url.txt", "w", encoding="utf-8") as f:
-            f.write(link)
-
-        print("Found vendor_boot.img")
-        PY
-
-        URL="$(cat download-url.txt)"
-
-        echo "Downloading image..."
-        curl -fLsS --retry 3 --retry-delay 3 \
-          -A "Mozilla/5.0" \
-          -o vendor_boot.img "$URL"
-
-        SIZE=$(stat -c %s vendor_boot.img)
-        echo "Downloaded size: $SIZE bytes"
-        file vendor_boot.img
-
-        if [ "$SIZE" -lt 1048576 ] || head -c 500 vendor_boot.img | grep -Eqi '<!DOCTYPE html|<html'; then
-          echo "::error::GoFile returned HTML or an invalid file."
+        if [ -z "${GOFILE_TOKEN:-}" ]; then
+          echo "::error::GOFILE_TOKEN is missing"
           exit 1
         fi
 
-        sha256sum vendor_boot.img
-        ls -lh vendor_boot.img
-        echo "Download completed."
+        echo "Checking GoFile API authorization..."
+
+        HTTP_CODE=$(curl -sS \
+          -o gofile-response.json \
+          -w "%{http_code}" \
+          -H "Authorization: Bearer ${GOFILE_TOKEN}" \
+          "https://api.gofile.io/contents/${FOLDER_ID}")
+
+        echo "HTTP status: $HTTP_CODE"
+
+        if [ "$HTTP_CODE" != "200" ]; then
+          echo "::error::GoFile API authorization failed. Check the token and API response."
+          cat gofile-response.json
+          exit 1
+        fi
+
+        cat gofile-response.json
    
 
     - name: Display Inputs
