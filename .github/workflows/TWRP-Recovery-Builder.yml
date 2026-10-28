@@ -201,23 +201,32 @@ jobs:
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
         
+    
     - name: Check GSI makefiles
       run: |
-          echo "=== Common tree branch ==="
-          git -C device/transsion/mt6789-common branch --show-current
+       echo "=== Current directory ==="
+          pwd
 
-          echo "=== Requested GSI makefiles ==="
+          echo "=== Device trees ==="
+          ls -la device/ || true
+          find device -maxdepth 4 -type d \
+            \( -name '*mt6789*' -o -name '*X6833B*' \) -print 2>/dev/null || true
+
+          echo "=== Common tree directory ==="
+          if [ -d device/transsion/mt6789-common ]; then
+            git -C device/transsion/mt6789-common branch --show-current
+          else
+            echo "Common tree is missing"
+          fi
+
+          echo "=== GSI makefiles ==="
           find build/make/target/product -maxdepth 1 \
-            \( -name '*gsi*keys*.mk' -o -name 'gsi_keys.mk' \) -print
+            \( -name '*gsi*keys*.mk' -o -name 'gsi_keys.mk' \) \
+            -print 2>/dev/null || true
 
-          echo "=== References to gsi_keys.mk ==="
-          grep -R -n "gsi_keys.mk" \
-            device/transsion/mt6789-common \
-            device/infinix/Infinix-X6833B 2>/dev/null || true
-
-          echo "=== Android source version ==="
-          grep -n "PLATFORM_VERSION\|PLATFORM_SDK_VERSION" \
-            build/make/core/version_defaults.mk 2>/dev/null || true
+          echo "=== Clone commands in device tree ==="
+          grep -n -E 'git clone|mt6789-common' \
+            device/infinix/Infinix-X6833B/vendorsetup.sh 2>/dev/null || true
 
 
     - name: Check Build Makefile
