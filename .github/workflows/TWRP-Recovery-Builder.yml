@@ -3,51 +3,46 @@ name: TWRP Recovery Builder 2024
 on:
   workflow_dispatch:
     inputs:
-      MANIFEST_BRANCH:
-        description: 'TWRP Minimal-Manifest Branch'
+       MANIFEST_BRANCH:
+        description: TWRP branch
         required: true
-        default: ''
         type: choice
+        default: twrp-14.1
         options:
-        - twrp-14.1
-        - twrp-12.1
-        - twrp-11
-        - twrp-9.0
-      DEVICE_TREE:
+          - twrp-14.1
+       DEVICE_TREE:
         description: 'Custom Recovery Tree' 
         required: true
         default: 'https://github.com/Sulustan007/twrp-device_infinix_Infinix-X6833B'
-      DEVICE_TREE_BRANCH:
+       DEVICE_TREE_BRANCH:
         description: 'Custom Recovery Tree Branch' 
         required: true
         default: 'fox_12.1-a14'
-      DEVICE_PATH:
+       DEVICE_PATH:
         description: 'Specify your Device Path'
         required: true
         default: 'device/infinix/Infinix-X6833B'
-      DEVICE_NAME:
+       DEVICE_NAME:
         description: 'Specify your Device Codename'
         required: true
         default: 'X6833B'
-      BUILD_TARGET:
-        description: 'Specify your Build Target' 
+       BUILD_TARGET:
+        description: Build target
         required: true
-        default: 'recovery'
         type: choice
+        default: vendorboot
         options:
-        - boot
-        - recovery
-        - vendorboot
-      LDCHECK:
+            - vendorboot
+       LDCHECK:
         description: 'Path of blobs to check' 
         required: true
         default: 'system/bin/qseecomd'
-      RECOVERY_TAR:
+       RECOVERY_TAR:
         description: 'Release Recovery.tar For Samsung devices'
         required: false
         default: false
         type: boolean
-      RECOVERY_INSTALLER:
+       RECOVERY_INSTALLER:
         description: 'Include recovery installer.zip'
         type: boolean
         required: true
@@ -118,8 +113,8 @@ jobs:
     - name: Install OpenJDK
       uses: actions/setup-java@v6
       with:
-        distribution: zulu
-        java-version: 8
+        distribution: temurin
+        java-version: 11
 
     - name: Install Git-Repo
       run: |
@@ -137,35 +132,41 @@ jobs:
         if_false: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git
 
     - name: Initialize Repo
-      run: |
-        mkdir workspace
-        cd workspace
-        git config --global user.name "Samuel Kendall"
-        git config --global user.email "kinguser981@gmail.com"
-        repo init --depth=1 -u ${{ steps.manifest.outputs.value }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
-  
-    - name: Repo Sync
-      run: |
-        cd workspace
-        repo sync -j$(nproc --all) --force-sync
-
-    - name: Clone Device Tree
-      run: |
-        cd workspace
-        git clone ${{ github.event.inputs.DEVICE_TREE }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
-        cd ${{ github.event.inputs.DEVICE_PATH }}
-        echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
-
-        
-    - name: Clone MT6789 Common Tree
       shell: bash
       run: |
-        set -euo pipefail
-        cd workspace
-        git clone --depth=1 \
-          -b fox_12.1 \
-          https://github.com/transsion-mt6789/twrp-device_transsion_mt6789-common.git \
-          device/transsion/mt6789-common
+        set -e
+        mkdir -p "$GITHUB_WORKSPACE/workspace"
+        cd "$GITHUB_WORKSPACE/workspace"
+
+        git config --global user.name "Samuel Kendall"
+        git config --global user.email "kinguser981@gmail.com"
+
+        repo init --depth=1 \
+          -u "${{ steps.manifest.outputs.value }}" \
+          -b "${{ github.event.inputs.MANIFEST_BRANCH }}"
+          
+    - name: Repo Sync
+      shell: bash
+      run: |
+        set -e
+        cd "$GITHUB_WORKSPACE/workspace"
+        repo sync -c --no-clone-bundle --no-tags -j2 --force-sync
+
+    - name: Clone Device Tree
+      shell: bash
+      run: |
+        set -e
+        cd "$GITHUB_WORKSPACE/workspace"
+
+        git clone \
+          --depth=1 \
+          -b "${{ github.event.inputs.DEVICE_TREE_BRANCH }}" \
+          "${{ github.event.inputs.DEVICE_TREE }}" \
+          "${{ github.event.inputs.DEVICE_PATH }}"
+
+        cd "${{ github.event.inputs.DEVICE_PATH }}"
+        echo "COMMIT_ID=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+        
 
 
     - name: Check Build Makefile
@@ -192,7 +193,7 @@ jobs:
         fi
 
     - name: Install Python 2
-      if: github.event.inputs.MANIFEST_BRANCH != 'twrp-11' && github.event.inputs.MANIFEST_BRANCH != 'twrp-12.1'  && github.event.inputs.MANIFEST_BRANCH != 'twrp-14'
+      if: github.event.inputs.MANIFEST_BRANCH != 'twrp-11' && github.event.inputs.MANIFEST_BRANCH != 'twrp-12.1' && github.event.inputs.MANIFEST_BRANCH != 'twrp-14.1'
       run: |
         sudo apt -y install python2
         cd /usr/bin
@@ -202,17 +203,17 @@ jobs:
     - name: Building Image
       shell: bash
       run: |
-        set -euo pipefail
-        cd workspace
+        set -e
+        cd "$GITHUB_WORKSPACE/workspace"
 
-        echo "Setting up build environment..."
         source build/envsetup.sh
+
         export ALLOW_MISSING_DEPENDENCIES=true
 
-        DEVICE_MAKEFILE="twrp_X6833B"
-        BUILD
+        lunch twrp_X6833B-eng
 
-      
+        mka adbd vendorbootimage -j2
+
     - name: Set Build Date # Output will be use in Release
       run: |
         echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
@@ -239,25 +240,29 @@ jobs:
         fi
       continue-on-error: true
       
+ 
     - name: Find vendor_boot.img
       id: find_vendor_boot
       shell: bash
       run: |
-          echo "Searching for vendor_boot.img..."
-          echo "Workspace: $GITHUB_WORKSPACE"
+        set -euo pipefail
 
-          FILE="$(find "$GITHUB_WORKSPACE" -type f -name "vendor_boot.img" -print -quit 2>/dev/null)"
+        IMAGE="$(find "$GITHUB_WORKSPACE/workspace/out/target/product" \
+          -type f \
+          -name vendor_boot.img \
+          -size +1M \
+          -print -quit)"
 
-          if [ -z "$FILE" ]; then
-            echo "::error::vendor_boot.img not found!"
-            echo "Available image files:"
-            find "$GITHUB_WORKSPACE" -type f -name "*.img" 2>/dev/null || true
-            exit 1
-          fi
+        if [ -z "$IMAGE" ]; then
+          echo "ERROR: Built vendor_boot.img not found"
+          exit 1
+        fi
 
-          echo "Found: $FILE"
-          echo "image_path=$FILE" >> "$GITHUB_OUTPUT"
+        echo "Built image: $IMAGE"
+        sha256sum "$IMAGE"
+        echo "image_path=$IMAGE" >> "$GITHUB_OUTPUT"
 
+       
     - name: Create GitHub Release and Upload vendor_boot.img
       uses: softprops/action-gh-release@v2
       with:
