@@ -223,19 +223,47 @@ jobs:
         sudo ln -sf python2 python
 
     
+   
     - name: Building Image
       shell: bash
       run: |
-        set -e
+        set -Eeuo pipefail
         cd "$GITHUB_WORKSPACE/workspace"
+
+        echo "=== Checking build environment ==="
+        if [ ! -f build/envsetup.sh ]; then
+          echo "::error::build/envsetup.sh not found"
+          exit 1
+        fi
 
         source build/envsetup.sh
 
         export ALLOW_MISSING_DEPENDENCIES=true
 
+        echo "=== Running lunch ==="
         lunch twrp_X6833B-eng
 
-        mka adbd vendorbootimage -j2
+        echo "=== Building images ==="
+        set +e
+        mka adbd vendorbootimage -j2 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+        BUILD_STATUS=${PIPESTATUS[0]}
+        set -e
+
+        if [ "$BUILD_STATUS" -ne 0 ]; then
+          echo "::error::Build failed with exit code $BUILD_STATUS"
+          echo "=== Last 80 lines of build log ==="
+          tail -n 80 "$GITHUB_WORKSPACE/build.log"
+          exit "$BUILD_STATUS"
+        fi
+
+    - name: Upload Build Log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: twrp-build-log
+        path: build.log
+        if-no-files-found: ignore
+
 
     - name: Set Build Date # Output will be use in Release
       run: |
