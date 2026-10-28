@@ -16,19 +16,19 @@ on:
       DEVICE_TREE:
         description: 'Custom Recovery Tree' 
         required: true
-        default: 'https://github.com/kinguser981/cap_sprout_twrp'
+        default: 'https://github.com/Sulustan007/twrp-device_infinix_Infinix-X6833B'
       DEVICE_TREE_BRANCH:
         description: 'Custom Recovery Tree Branch' 
         required: true
-        default: 'android-12.1'
+        default: 'fox_12.1-a14'
       DEVICE_PATH:
-        description: 'Specify your Device Path' 
+        description: 'Specify your Device Path'
         required: true
-        default: 'device/nokia/cap_sprout'
+        default: 'device/infinix/Infinix-X6833B'
       DEVICE_NAME:
-        description: 'Specify your Device Codename' 
+        description: 'Specify your Device Codename'
         required: true
-        default: 'cap_sprout'
+        default: 'X6833B'
       BUILD_TARGET:
         description: 'Specify your Build Target' 
         required: true
@@ -64,9 +64,27 @@ jobs:
     steps:
     - name: Check Out
       uses: actions/checkout@v3
+   
     - name: Download Stock Vendor Boot
+      shell: bash
       run: |
-        curl -L -s --retry 5 --retry-delay 3 --connect-timeout 10 -o vendor_boot.img "https://gofile.io/d/RU3Ms5a7"
+        set -euo pipefail
+
+        URL="https://cold-na-phx-3.gofile.io/download/web/94ad1c77-e53d-417c-932e-3592a4315824/vendor_boot.img"
+
+        curl -fL --retry 5 --retry-delay 3 \
+          -o vendor_boot.img "$URL"
+
+        if [ "$(stat -c %s vendor_boot.img)" -lt 1048576 ]; then
+          echo "::error::Downloaded file is too small!"
+          file vendor_boot.img
+          exit 1
+        fi
+
+        echo "Stock vendor_boot.img downloaded successfully"
+        ls -lh vendor_boot.img
+        file vendor_boot.img
+
     - name: Display Inputs
       run: |
         echo "::group::User Environment Variables"
@@ -138,18 +156,41 @@ jobs:
         cd ${{ github.event.inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
-    - name: Check Build Makefile
+        
+    - name: Clone MT6789 Common Tree
+      shell: bash
       run: |
+        set -euo pipefail
         cd workspace
-        if [ -f ${{ github.event.inputs.DEVICE_PATH }}/twrp_${{ github.event.inputs.DEVICE_NAME}}.mk ]; then
-            echo "DEVICE_MAKEFILE=twrp_${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_ENV
-        elif [ -f ${{ github.event.inputs.DEVICE_PATH }}/omni_${{ github.event.inputs.DEVICE_NAME}}.mk ]; then
-            echo "DEVICE_MAKEFILE=omni_${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_ENV
+        git clone --depth=1 \
+          -b fox_12.1 \
+          https://github.com/transsion-mt6789/twrp-device_transsion_mt6789-common.git \
+          device/transsion/mt6789-common
+
+
+    - name: Check Build Makefile
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd workspace
+
+        DEVICE_PATH="${{ github.event.inputs.DEVICE_PATH }}"
+        DEVICE_NAME="${{ github.event.inputs.DEVICE_NAME }}"
+
+        echo "Checking device path: $DEVICE_PATH"
+        ls -la "$DEVICE_PATH"
+
+        if [ -f "$DEVICE_PATH/twrp_${DEVICE_NAME}.mk" ]; then
+          echo "DEVICE_MAKEFILE=twrp_${DEVICE_NAME}" >> "$GITHUB_ENV"
+        elif [ -f "$DEVICE_PATH/omni_${DEVICE_NAME}.mk" ]; then
+          echo "DEVICE_MAKEFILE=omni_${DEVICE_NAME}" >> "$GITHUB_ENV"
         else
-            echo "No recovery makefile file found!"
+          echo "::error::Could not find a matching device makefile"
+          echo "Available makefiles:"
+          find "$DEVICE_PATH" -maxdepth 1 -type f -name "*.mk"
+          exit 1
         fi
-      continue-on-error: true
-      
+
     - name: Install Python 2
       if: github.event.inputs.MANIFEST_BRANCH != 'twrp-11' && github.event.inputs.MANIFEST_BRANCH != 'twrp-12.1'  && github.event.inputs.MANIFEST_BRANCH != 'twrp-14'
       run: |
@@ -157,13 +198,20 @@ jobs:
         cd /usr/bin
         sudo ln -sf python2 python
 
-    - name: Building Image 
+    
+    - name: Building Image
+      shell: bash
       run: |
+        set -euo pipefail
         cd workspace
+
+        echo "Setting up build environment..."
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ env.DEVICE_MAKEFILE }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
-        echo "Done building your ${{ github.event.inputs.BUILD_TARGET }}.img"
+
+        DEVICE_MAKEFILE="twrp_X6833B"
+        BUILD
+
       
     - name: Set Build Date # Output will be use in Release
       run: |
