@@ -61,108 +61,48 @@ jobs:
       uses: actions/checkout@v3
    
     
-    
     - name: Download Stock Vendor Boot
       shell: bash
-      env:
-        GOFILE_TOKEN: ${{ secrets.GOFILE_TOKEN }}
-        FOLDER_ID: RU3Ms5a7
       run: |
         set -euo pipefail
 
-        if [ -z "${GOFILE_TOKEN:-}" ]; then
-          echo "::error::GOFILE_TOKEN is missing in GitHub Secrets."
+        URL="https://drive.google.com/uc?export=download&id=178LNFOUClXJQpp499-dF_bMc4BDdmf10"
+
+        echo "Downloading vendor_boot.img from Google Drive..."
+
+        python3 -m pip install --user gdown
+
+        "$(python3 -m site --user-base)/bin/gdown" \
+          "$URL" \
+          -O vendor_boot.img
+
+        if [ ! -s vendor_boot.img ]; then
+          echo "::error::Downloaded file is empty."
           exit 1
         fi
-
-        echo "Requesting GoFile API..."
-
-        HTTP_CODE=$(curl -sSL \
-          -o gofile-response.json \
-          -w "%{http_code}" \
-          --connect-timeout 20 \
-          -H "Authorization: Bearer ${GOFILE_TOKEN}" \
-          -H "Accept: application/json" \
-          "https://api.gofile.io/contents/${FOLDER_ID}")
-
-        echo "HTTP status: $HTTP_CODE"
-        echo "GoFile API response:"
-
-        python3 - <<'PY'
-        import json
-        import sys
-
-        try:
-            with open("gofile-response.json", encoding="utf-8") as f:
-                response = json.load(f)
-        except Exception as exc:
-            print("Response is not valid JSON:", exc)
-            with open("gofile-response.json", "r", errors="replace") as f:
-                print(f.read(1000))
-            sys.exit(1)
-
-        print("Status:", response.get("status", "unknown"))
-        print("Message:", response.get("message", ""))
-        print("Error:", response.get("error", ""))
-
-        if response.get("status") != "ok":
-            print("API did not accept the request.")
-            sys.exit(1)
-
-        data = response.get("data", {})
-        children = data.get("children", {})
-        files = list(children.values()) if isinstance(children, dict) else (
-            children if isinstance(children, list) else []
-        )
-
-        target = next(
-            (item for item in files if item.get("name") == "vendor_boot.img"),
-            None
-        )
-
-        if target is None:
-            print("vendor_boot.img was not found in the folder.")
-            print("Files available:")
-            for item in files:
-                print("-", item.get("name"))
-            sys.exit(1)
-
-        link = target.get("link")
-        if not link:
-            print("API returned no download link for vendor_boot.img.")
-            sys.exit(1)
-
-        with open("gofile-download-url.txt", "w", encoding="utf-8") as f:
-            f.write(link)
-
-        print("Found vendor_boot.img.")
-        PY
-
-        URL="$(cat gofile-download-url.txt)"
-
-        echo "Downloading vendor_boot.img..."
-
-        curl -fLsS --retry 3 --retry-delay 3 \
-          --connect-timeout 20 \
-          -A "Mozilla/5.0" \
-          -o vendor_boot.img "$URL"
 
         SIZE=$(stat -c %s vendor_boot.img)
         echo "Downloaded size: $SIZE bytes"
         file vendor_boot.img
 
-        if [ "$SIZE" -lt 1048576 ] || head -c 500 vendor_boot.img | grep -Eqi '<!DOCTYPE html|<html'; then
-          echo "::error::Downloaded file is too small or is HTML."
+        if [ "$SIZE" -lt 1048576 ]; then
+          echo "::error::File is too small or download failed."
+          exit 1
+        fi
+
+        if head -c 500 vendor_boot.img | grep -Eqi '<!DOCTYPE html|<html'; then
+          echo "::error::Google Drive returned HTML instead of the image."
           exit 1
         fi
 
         echo "SHA256:"
         sha256sum vendor_boot.img
+
         ls -lh vendor_boot.img
-        echo "Download completed."
+        echo "Download completed successfully."
+
 
    
-
     - name: Display Inputs
       run: |
         echo "::group::User Environment Variables"
@@ -374,79 +314,38 @@ jobs:
         echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/TWRP-${GITHUB_RUN_ID}"
 
 
-    - name: Upload vendor_boot.img to GoFile
+    - name: Upload vendor_boot.img to MEGA
       shell: bash
       env:
-        GOFILE_TOKEN: ${{ secrets.GOFILE_TOKEN }}
-        FILE: ${{ steps.find_vendor_boot.outputs.image_path }}
+        MEGA_EMAIL: ${{ secrets.MEGA_EMAIL }}
+        MEGA_PASSWORD: ${{ secrets.MEGA_PASSWORD }}
       run: |
         set -euo pipefail
 
-        if [ -z "${FILE:-}" ] || [ ! -f "$FILE" ]; then
-          echo "::error::vendor_boot.img not found: ${FILE:-empty path}"
+        IMAGE_PATH="$GITHUB_WORKSPACE/workspace/out/target/product/X6833B/vendor_boot.img"
+
+        if [ ! -f "$IMAGE_PATH" ]; then
+          IMAGE_PATH="$(find "$GITHUB_WORKSPACE" -type f -name vendor_boot.img \
+            -path '*/out/target/product/*' -print -quit)"
+        fi
+
+        if [ -z "${IMAGE_PATH:-}" ] || [ ! -f "$IMAGE_PATH" ]; then
+          echo "::error::Built vendor_boot.img not found"
           exit 1
         fi
 
-        echo "Uploading: $FILE"
-        ls -lh "$FILE"
-
-        if [ -n "${GOFILE_TOKEN:-}" ]; then
-          RESPONSE=$(curl --fail-with-body --silent --show-error \
-            --retry 2 \
-            -H "Authorization: Bearer ${GOFILE_TOKEN}" \
-            -F "file=@${FILE}" \
-            https://upload.gofile.io/uploadfile)
-        else
-          RESPONSE=$(curl --fail-with-body --silent --show-error \
-            --retry 2 \
-            -F "file=@${FILE}" \
-            https://upload.gofile.io/uploadfile)
-        fi
-
-        echo "$RESPONSE" > gofile-response.json
-
-        python3 - <<'PY'
-        import json
-        import sys
-
-        with open("gofile-response.json", encoding="utf-8") as f:
-            response = json.load(f)
-
-        if response.get("status") != "ok":
-            print("GoFile upload failed:", response)
-            sys.exit(1)
-
-        data = response.get("data", {})
-        link = data.get("downloadPage") or data.get("downloadPageUrl")
-
-        if not link:
-            print("Upload response has no download link:", response)
-            sys.exit(1)
-
-        print("GoFile download page:", link)
-
-        with open("gofile-link.txt", "w", encoding="utf-8") as f:
-            f.write(link)
-        PY
-
-        echo "## GoFile Upload" >> "$GITHUB_STEP_SUMMARY"
-        echo "Download link: $(cat gofile-link.txt)" >> "$GITHUB_STEP_SUMMARY"
-
-    - name: Show GoFile link
-      if: success()
-      shell: bash
-      run: |
-        if [ ! -f gofile-link.txt ]; then
-          echo "::error::GoFile link file not found"
+        if [ -z "$MEGA_EMAIL" ] || [ -z "$MEGA_PASSWORD" ]; then
+          echo "::error::MEGA credentials are missing"
           exit 1
         fi
 
-        LINK="$(cat gofile-link.txt)"
+        sudo apt-get update
+        sudo apt-get install -y megacmd
 
-        echo "GoFile download link: $LINK"
+        mega-login "$MEGA_EMAIL" "$MEGA_PASSWORD"
+        mega-mkdir -p /TWRP-Backups
+        mega-put "$IMAGE_PATH" /TWRP-Backups/
+        mega-logout
 
-        {
-          echo "## GoFile Download"
-          echo ""
-          echo "[$LINK]($LINK)"
-        } >> "$GITHUB_STEP_SUMMARY"
+        echo "vendor_boot.img uploaded to MEGA"
+ 
