@@ -69,15 +69,18 @@ jobs:
 
         URL="https://cold-na-phx-3.gofile.io/download/web/94ad1c77-e53d-417c-932e-3592a4315824/vendor_boot.img"
 
-        echo "Downloading vendor_boot.img..."
+        echo "Downloading stock vendor_boot.img..."
 
-        curl -fLsS --retry 3 \
+        curl -fLsS --retry 3 --retry-delay 3 \
           --connect-timeout 20 \
+          -A "Mozilla/5.0" \
           -o vendor_boot.img "$URL"
 
-        SIZE=$(stat -c %s vendor_boot.img)
+        echo "Checking downloaded file..."
 
+        SIZE=$(stat -c %s vendor_boot.img)
         echo "Downloaded size: $SIZE bytes"
+
         file vendor_boot.img
 
         if [ "$SIZE" -lt 1048576 ]; then
@@ -87,12 +90,18 @@ jobs:
           exit 1
         fi
 
-        if ! file vendor_boot.img | grep -qi 'Android'; then
-          echo "::warning::File type is not identified as Android; verify the image before using it."
+        if head -c 500 vendor_boot.img | grep -Eqi '<!DOCTYPE html|<html'; then
+          echo "::error::GoFile returned an HTML page instead of vendor_boot.img."
+          exit 1
         fi
 
+        echo "SHA256:"
         sha256sum vendor_boot.img
+
+        echo "Downloaded file:"
         ls -lh vendor_boot.img
+
+        echo "Stock vendor_boot.img downloaded successfully."
 
 
     - name: Display Inputs
