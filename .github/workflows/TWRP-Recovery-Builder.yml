@@ -227,7 +227,7 @@ jobs:
     - name: Building Image
       shell: bash
       run: |
-        set -Eeuo pipefail
+        set -eo pipefail
         cd "$GITHUB_WORKSPACE/workspace"
 
         echo "=== Checking build environment ==="
@@ -243,18 +243,9 @@ jobs:
         echo "=== Running lunch ==="
         lunch twrp_X6833B-eng
 
-        echo "=== Building images ==="
-        set +e
-        mka adbd vendorbootimage -j2 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
-        BUILD_STATUS=${PIPESTATUS[0]}
-        set -e
+        echo "=== Building vendor boot image ==="
+        mka adbd vendorbootimage -j2
 
-        if [ "$BUILD_STATUS" -ne 0 ]; then
-          echo "::error::Build failed with exit code $BUILD_STATUS"
-          echo "=== Last 80 lines of build log ==="
-          tail -n 80 "$GITHUB_WORKSPACE/build.log"
-          exit "$BUILD_STATUS"
-        fi
 
     - name: Upload Build Log
       if: always()
