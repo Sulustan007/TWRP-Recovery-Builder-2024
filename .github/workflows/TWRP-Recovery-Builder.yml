@@ -305,31 +305,46 @@ jobs:
       
     - name: Configure and Build TWRP
       run: |
-        set -eo pipefail
+          set -eo pipefail
 
-        echo "=== Phone tree vendorsetup.sh ==="
-        cat device/infinix/Infinix-X6833B/vendorsetup.sh
+          echo "=== Current directory ==="
+          pwd
 
-        cho "=== Common tree vendorsetup.sh ==="
-        if [ -f device/transsion/mt6789-common/vendorsetup.sh ]; then
-          cat device/transsion/mt6789-common/vendorsetup.sh
+          echo "=== Device directory ==="
+          ls -la device/ 2>/dev/null || true
+
+          echo "=== Locate vendorsetup.sh ==="
+          find device -maxdepth 6 -type f -name vendorsetup.sh \
+            -print 2>/dev/null || true
+
+          echo "=== Phone tree ==="
+          if [ -d device/infinix/Infinix-X6833B ]; then
+            ls -la device/infinix/Infinix-X6833B
+            if [ -f device/infinix/Infinix-X6833B/vendorsetup.sh ]; then
+              cat device/infinix/Infinix-X6833B/vendorsetup.sh
+            else
+              echo "Phone vendorsetup.sh not found"
+            fi
           else
-              echo "File does not exist"
+            echo "Phone tree not found at expected path"
+          fi
+
+          echo "=== Common tree ==="
+          if [ -d device/transsion/mt6789-common ]; then
+            ls -la device/transsion/mt6789-common
+          else
+            echo "Common tree not found at expected path"
           fi
 
           echo "=== gflags references ==="
-          grep -R -n "external/gflags" \
-              device/infinix/Infinix-X6833B \
-              device/transsion/mt6789-common 2>/dev/null || true
+          grep -R -n "external/gflags" device 2>/dev/null || true
 
-          echo "=== Loading build environment ==="
-          source build/envsetup.sh
-          lunch twrp_X6833B-eng
+          echo "=== GSI makefiles ==="
+          find build/make/target/product -maxdepth 1 \
+            \( -name '*gsi*keys*.mk' -o -name 'gsi_keys.mk' \) \
+            -print 2>/dev/null || true
 
-          # Остальные команды сборки оставь здесь без изменений
-
-   
-                
+                  
     - name: Upload Build Log
       if: always()
       uses: actions/upload-artifact@v4
