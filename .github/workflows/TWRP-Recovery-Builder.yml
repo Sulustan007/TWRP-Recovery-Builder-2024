@@ -61,6 +61,7 @@ jobs:
       uses: actions/checkout@v3
    
     
+    
     - name: Download Stock Vendor Boot
       shell: bash
       env:
@@ -70,27 +71,96 @@ jobs:
         set -euo pipefail
 
         if [ -z "${GOFILE_TOKEN:-}" ]; then
-          echo "::error::GOFILE_TOKEN is missing"
+          echo "::error::GOFILE_TOKEN is missing in GitHub Secrets."
           exit 1
         fi
 
-        echo "Checking GoFile API authorization..."
+        echo "Requesting GoFile API..."
 
-        HTTP_CODE=$(curl -sS \
+        HTTP_CODE=$(curl -sSL \
           -o gofile-response.json \
           -w "%{http_code}" \
+          --connect-timeout 20 \
           -H "Authorization: Bearer ${GOFILE_TOKEN}" \
+          -H "Accept: application/json" \
           "https://api.gofile.io/contents/${FOLDER_ID}")
 
         echo "HTTP status: $HTTP_CODE"
+        echo "GoFile API response:"
 
-        if [ "$HTTP_CODE" != "200" ]; then
-          echo "::error::GoFile API authorization failed. Check the token and API response."
-          cat gofile-response.json
+        python3 - <<'PY'
+        import json
+        import sys
+
+        try:
+            with open("gofile-response.json", encoding="utf-8") as f:
+                response = json.load(f)
+        except Exception as exc:
+            print("Response is not valid JSON:", exc)
+            with open("gofile-response.json", "r", errors="replace") as f:
+                print(f.read(1000))
+            sys.exit(1)
+
+        print("Status:", response.get("status", "unknown"))
+        print("Message:", response.get("message", ""))
+        print("Error:", response.get("error", ""))
+
+        if response.get("status") != "ok":
+            print("API did not accept the request.")
+            sys.exit(1)
+
+        data = response.get("data", {})
+        children = data.get("children", {})
+        files = list(children.values()) if isinstance(children, dict) else (
+            children if isinstance(children, list) else []
+        )
+
+        target = next(
+            (item for item in files if item.get("name") == "vendor_boot.img"),
+            None
+        )
+
+        if target is None:
+            print("vendor_boot.img was not found in the folder.")
+            print("Files available:")
+            for item in files:
+                print("-", item.get("name"))
+            sys.exit(1)
+
+        link = target.get("link")
+        if not link:
+            print("API returned no download link for vendor_boot.img.")
+            sys.exit(1)
+
+        with open("gofile-download-url.txt", "w", encoding="utf-8") as f:
+            f.write(link)
+
+        print("Found vendor_boot.img.")
+        PY
+
+        URL="$(cat gofile-download-url.txt)"
+
+        echo "Downloading vendor_boot.img..."
+
+        curl -fLsS --retry 3 --retry-delay 3 \
+          --connect-timeout 20 \
+          -A "Mozilla/5.0" \
+          -o vendor_boot.img "$URL"
+
+        SIZE=$(stat -c %s vendor_boot.img)
+        echo "Downloaded size: $SIZE bytes"
+        file vendor_boot.img
+
+        if [ "$SIZE" -lt 1048576 ] || head -c 500 vendor_boot.img | grep -Eqi '<!DOCTYPE html|<html'; then
+          echo "::error::Downloaded file is too small or is HTML."
           exit 1
         fi
 
-        cat gofile-response.json
+        echo "SHA256:"
+        sha256sum vendor_boot.img
+        ls -lh vendor_boot.img
+        echo "Download completed."
+
    
 
     - name: Display Inputs
