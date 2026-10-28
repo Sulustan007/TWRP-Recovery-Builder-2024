@@ -302,30 +302,32 @@ jobs:
         echo "=== Diagnostic completed ==="
 
         
+      
     - name: Configure and Build TWRP
-      shell: bash
       run: |
         set -eo pipefail
-        cd "$GITHUB_WORKSPACE/workspace"
 
-        echo "=== Loading build environment ==="
-        source build/envsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
+        echo "=== Phone tree vendorsetup.sh ==="
+        cat device/infinix/Infinix-X6833B/vendorsetup.sh
 
-        echo "=== Inspecting common device tree ==="
-        if [ -f device/transsion/mt6789-common/common.mk ]; then
-          sed -n '1,50p' device/transsion/mt6789-common/common.mk
-        else
-          echo "::error::Common device tree was not cloned"
-          find device -maxdepth 5 -type f -name common.mk
-          exit 1
-        fi
+        cho "=== Common tree vendorsetup.sh ==="
+        if [ -f device/transsion/mt6789-common/vendorsetup.sh ]; then
+          cat device/transsion/mt6789-common/vendorsetup.sh
+          else
+              echo "File does not exist"
+          fi
 
-        echo "=== Checking missing include ==="
-        grep -R -n 'gsi_keys.mk' device/transsion device/infinix 2>/dev/null || true
+          echo "=== gflags references ==="
+          grep -R -n "external/gflags" \
+              device/infinix/Infinix-X6833B \
+              device/transsion/mt6789-common 2>/dev/null || true
 
-        echo "=== Checking available files ==="
-        ls -l build/make/target/product/*gsi* 2>/dev/null || true
+          echo "=== Loading build environment ==="
+          source build/envsetup.sh
+          lunch twrp_X6833B-eng
+
+          # Остальные команды сборки оставь здесь без изменений
+
    
                 
     - name: Upload Build Log
