@@ -3,6 +3,11 @@ name: TWRP Recovery Builder 2024
 on:
   workflow_dispatch:
     inputs:
+       RUN_DIAGNOSTICS:
+        description: 'Only diagnose source compatibility'
+        required: true
+        type: boolean
+        default: true
        MANIFEST_BRANCH:
         description: TWRP branch
         required: true
@@ -62,6 +67,7 @@ jobs:
    
     
     - name: Download Stock Vendor Boot
+      if: ${{ !inputs.RUN_DIAGNOSTICS }}
       shell: bash
       run: |
         set -euo pipefail
@@ -118,14 +124,17 @@ jobs:
         echo "::endgroup::"
 
     - name: Cleanup
+      if: ${{ !inputs.RUN_DIAGNOSTICS }}
       uses: rokibhasansagar/slimhub_actions@main
       
     - name: Set Swap Space
+      if: ${{ !inputs.RUN_DIAGNOSTICS }}
       uses: pierotofy/set-swap-space@master
       with:
         swap-size-gb: 24
         
     - name: Prepare the environment
+      if: ${{ !inputs.RUN_DIAGNOSTICS }}
       run: |
         sudo apt update
         sudo apt -y upgrade
@@ -134,6 +143,7 @@ jobs:
         sudo apt -y install libncurses5
 
     - name: Install OpenJDK
+      if: ${{ !inputs.RUN_DIAGNOSTICS }}
       uses: actions/setup-java@v6
       with:
         distribution: temurin
