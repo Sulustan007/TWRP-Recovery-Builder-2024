@@ -222,7 +222,26 @@ jobs:
         cd /usr/bin
         sudo ln -sf python2 python
 
-        
+    
+    - name: Diagnose Android source tree
+      shell: bash
+      run: |
+        cd "$GITHUB_WORKSPACE/workspace"
+
+        echo "=== Android build version ==="
+        grep -n "PLATFORM_VERSION\|PLATFORM_SDK_VERSION" \
+          build/make/core/version_defaults.mk || true
+
+        echo "=== Missing GSI keys file ==="
+        ls -la build/make/target/product/ || true
+
+        echo "=== Common makefile ==="
+        sed -n '1,100p' device/transsion/mt6789-common/common.mk
+
+        echo "=== Device tree remotes and branches ==="
+        git -C device/infinix/Infinix-X6833B remote -v || true
+        git -C device/transsion/mt6789-common remote -v || true
+   
     
     - name: Configure and Build TWRP
       shell: bash
