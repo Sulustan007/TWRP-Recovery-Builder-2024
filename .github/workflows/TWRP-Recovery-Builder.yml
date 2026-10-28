@@ -201,28 +201,23 @@ jobs:
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
         
-    - name: Check GSI keys compatibility
-      shell: bash
+    - name: Check GSI makefiles
       run: |
-        cd "$GITHUB_WORKSPACE/workspace"
+          echo "=== Common tree branch ==="
+          git -C device/transsion/mt6789-common branch --show-current
 
-        echo "===== GSI KEYS FILES ====="
-        find build/make/target/product -maxdepth 2 -type f \
-          \( -name '*gsi*keys*.mk' -o -name 'gsi_keys.mk' \) \
-          -print
+          echo "=== Requested GSI makefiles ==="
+          find build/make/target/product -maxdepth 1 \
+            \( -name '*gsi*keys*.mk' -o -name 'gsi_keys.mk' \) -print
 
-        echo "===== GSI KEYS REFERENCES ====="
-        grep -R -n 'gsi_keys.mk\|developer_gsi_keys.mk' \
-          build/make device/transsion/mt6789-common \
-          2>/dev/null || true
+          echo "=== References to gsi_keys.mk ==="
+          grep -R -n "gsi_keys.mk" \
+            device/transsion/mt6789-common \
+            device/infinix/Infinix-X6833B 2>/dev/null || true
 
-        echo "===== BUILD MAKE BRANCH ====="
-        git -C build/make remote -v
-        git -C build/make log -1 --oneline
-
-        echo "===== COMMON TREE BRANCH ====="
-        git -C device/transsion/mt6789-common remote -v
-        git -C device/transsion/mt6789-common log -1 --oneline
+          echo "=== Android source version ==="
+          grep -n "PLATFORM_VERSION\|PLATFORM_SDK_VERSION" \
+            build/make/core/version_defaults.mk 2>/dev/null || true
 
 
     - name: Check Build Makefile
